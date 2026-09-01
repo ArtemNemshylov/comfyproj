@@ -1,0 +1,14 @@
+# Нормалізація переносів рядків: проєкт живе і на macOS, і на
+# Windows/Linux (Docker-хост із 3070) — щоб git не сварився на diff
+# через CRLF/LF.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.mp4 binary
+*.pth binary
+*.safetensors binary
+*.ckpt binary

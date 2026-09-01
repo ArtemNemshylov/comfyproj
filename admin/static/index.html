@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>compfui — адмінка</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">🐕 compfui <span class="muted">admin (POC)</span></div>
+      <div id="health" class="health muted">перевірка ComfyUI...</div>
+    </header>
+
+    <div class="layout">
+      <aside class="sidebar">
+        <button id="newCharBtn" class="btn btn-primary block">+ Новий персонаж</button>
+        <div id="charList" class="char-list"></div>
+      </aside>
+
+      <main id="main" class="main">
+        <div class="empty-state">
+          <p>Оберіть персонажа зліва або створіть нового.</p>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <div id="modalRoot"></div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

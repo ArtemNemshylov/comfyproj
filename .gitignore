@@ -1,0 +1,28 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# --- IDE / OS ---
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# --- Важкі згенеровані/завантажені дані — не для git ---
+comfyui/          # клон ComfyUI + моделі (нативний macOS-шлях)
+admin/data/       # sqlite, фото/відео персонажів, LoRA, job-логи
+docker-data/      # томи Docker-шляху (моделі, дані)
+logs/
+*.safetensors
+*.ckpt
+*.pt
+*.pth
+*.log
+*.pid
+
+# --- Секрети / локальні оверрайди ---
+.env
+.env.*

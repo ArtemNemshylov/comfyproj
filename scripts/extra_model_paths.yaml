@@ -1,0 +1,6 @@
+# Каже ComfyUI шукати LoRA-файли ще й у теці admin/data/loras (куди їх
+# зберігає наш тренувальний скрипт), окрім стандартної models/loras.
+# Цей файл копіюється в корінь comfyui/ під час setup_comfyui.sh.
+compf_admin:
+    base_path: ../admin/data
+    loras: loras

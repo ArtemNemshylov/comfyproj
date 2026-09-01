@@ -1,0 +1,13 @@
+fastapi
+uvicorn[standard]
+sqlmodel
+python-multipart
+requests
+pillow
+torch
+torchvision
+diffusers>=0.27
+transformers
+accelerate
+peft
+safetensors

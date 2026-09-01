@@ -1,0 +1,57 @@
+# Запуск: docker compose up --build
+# Адмінка: http://localhost:8000   ComfyUI напряму: http://localhost:8188
+#
+# Потрібно на хості: NVIDIA-драйвер + nvidia-container-toolkit (Linux)
+# або Docker Desktop з увімкненою GPU-підтримкою через WSL2 (Windows).
+# Перевірка: docker run --rm --gpus all nvidia/cuda:12.4.1-base-ubuntu22.04 nvidia-smi
+#
+# Перший запуск довантажує моделі (~6 ГБ) у docker-data/ — займе трохи
+# часу залежно від інтернету, дивіться прогрес: docker compose logs -f comfyui
+
+services:
+  comfyui:
+    build:
+      context: .
+      dockerfile: docker/comfyui.Dockerfile
+    ports:
+      - "8188:8188"
+    environment:
+      COMPF_ADMIN_DATA_MOUNT: /admin-data
+      NVIDIA_VISIBLE_DEVICES: all
+    volumes:
+      - ./docker-data/comfyui-models:/app/comfyui/models
+      - ./docker-data/admin-data:/admin-data:ro
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: ["gpu"]
+    restart: unless-stopped
+
+  admin:
+    build:
+      context: .
+      dockerfile: docker/admin.Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      COMFYUI_HOST: comfyui
+      COMFYUI_PORT: "8188"
+      COMPF_DATA_DIR: /data
+      COMPF_CHECKPOINTS_DIR: /models/checkpoints
+      NVIDIA_VISIBLE_DEVICES: all
+    volumes:
+      - ./docker-data/admin-data:/data
+      - ./docker-data/comfyui-models/checkpoints:/models/checkpoints:ro
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: ["gpu"]
+    depends_on:
+      - comfyui
+    restart: unless-stopped

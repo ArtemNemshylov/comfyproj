@@ -1,0 +1,11 @@
+.venv
+admin/.venv
+admin/data
+comfyui/
+.idea
+__pycache__
+*.pyc
+logs/
+docker-data/
+.git
+*.md
