@@ -1,5 +1,7 @@
 fastapi
 uvicorn[standard]
+websockets
+pyyaml
 sqlmodel
 python-multipart
 requests

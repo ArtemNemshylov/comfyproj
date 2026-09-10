@@ -217,6 +217,74 @@ def build_video_workflow(
     return g
 
 
+def build_zimage_workflow(
+    *,
+    unet_name: str,
+    clip_name: str,
+    vae_name: str,
+    positive_prompt: str,
+    width: int,
+    height: int,
+    seed: Optional[int],
+    filename_prefix: str,
+    steps: int = 8,
+    shift: float = 3,
+    lora_path: Optional[str] = None,
+    lora_strength: float = 1.0,
+) -> dict:
+    """Z-Image-Turbo (Alibaba Tongyi Lab, S3-DiT, 6B) — архітектура повністю
+    інша за SD1.5/SDXL: окремі UNETLoader/CLIPLoader(type=lumina2)/VAELoader
+    замість одного CheckpointLoaderSimple, EmptySD3LatentImage замість
+    EmptyLatentImage, і ModelSamplingAuraFlow перед KSampler. Це "turbo"
+    (дистильована) модель — cfg=1 і немає реального негативного промпту,
+    негативна кондиція просто зануляється (ConditioningZeroOut). Точний граф
+    узятий з офіційного ComfyUI-шаблону "image_z_image_turbo_int8".
+    Sampler/scheduler (res_multistep/simple) і steps=8/shift=3 — дефолти
+    того ж шаблону, під int8-модель."""
+    g: dict = {}
+
+    g["28"] = {"class_type": "UNETLoader", "inputs": {"unet_name": unet_name, "weight_dtype": "default"}}
+    g["30"] = {"class_type": "CLIPLoader", "inputs": {"clip_name": clip_name, "type": "lumina2", "device": "default"}}
+    g["29"] = {"class_type": "VAELoader", "inputs": {"vae_name": vae_name}}
+
+    model_link = ["28", 0]
+    if lora_path:
+        g["40"] = {
+            "class_type": "LoraLoaderModelOnly",
+            "inputs": {"model": model_link, "lora_name": lora_path, "strength_model": lora_strength},
+        }
+        model_link = ["40", 0]
+
+    g["27"] = {
+        "class_type": "CLIPTextEncode",
+        "inputs": {"clip": ["30", 0], "text": positive_prompt},
+    }
+    g["33"] = {"class_type": "ConditioningZeroOut", "inputs": {"conditioning": ["27", 0]}}
+    g["13"] = {
+        "class_type": "EmptySD3LatentImage",
+        "inputs": {"width": width, "height": height, "batch_size": 1},
+    }
+    g["11"] = {"class_type": "ModelSamplingAuraFlow", "inputs": {"model": model_link, "shift": shift}}
+    g["3"] = {
+        "class_type": "KSampler",
+        "inputs": {
+            "model": ["11", 0],
+            "positive": ["27", 0],
+            "negative": ["33", 0],
+            "latent_image": ["13", 0],
+            "seed": _seed(seed),
+            "steps": steps,
+            "cfg": 1,
+            "sampler_name": "res_multistep",
+            "scheduler": "simple",
+            "denoise": 1,
+        },
+    }
+    g["8"] = {"class_type": "VAEDecode", "inputs": {"samples": ["3", 0], "vae": ["29", 0]}}
+    g["9"] = {"class_type": "SaveImage", "inputs": {"images": ["8", 0], "filename_prefix": filename_prefix}}
+    return g
+
+
 def default_positive_prompt(prompt_prefix: str, trigger_token: str, pose_or_motion: str) -> str:
     parts = [p.strip() for p in (trigger_token, prompt_prefix, pose_or_motion) if p and p.strip()]
     return ", ".join(parts)

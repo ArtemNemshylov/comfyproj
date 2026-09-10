@@ -17,9 +17,11 @@ services:
       - "8188:8188"
     environment:
       COMPF_ADMIN_DATA_MOUNT: /admin-data
+      COMPF_BASE_CHECKPOINT: Realistic_Vision_V5.1_fp16-no-ema.safetensors
       NVIDIA_VISIBLE_DEVICES: all
     volumes:
       - ./docker-data/comfyui-models:/app/comfyui/models
+      - ./docker-data/animatediff-models:/app/comfyui/custom_nodes/ComfyUI-AnimateDiff-Evolved/models
       - ./docker-data/admin-data:/admin-data:ro
     deploy:
       resources:
@@ -41,10 +43,11 @@ services:
       COMFYUI_PORT: "8188"
       COMPF_DATA_DIR: /data
       COMPF_CHECKPOINTS_DIR: /models/checkpoints
+      COMPF_BASE_CHECKPOINT: Realistic_Vision_V5.1_fp16-no-ema.safetensors
       NVIDIA_VISIBLE_DEVICES: all
     volumes:
       - ./docker-data/admin-data:/data
-      - ./docker-data/comfyui-models/checkpoints:/models/checkpoints:ro
+      - ./docker-data/comfyui-models:/models:ro
     deploy:
       resources:
         reservations:

@@ -51,6 +51,25 @@ ANIMATEDIFF_MODELS_DIR = Path(os.environ.get(
     "COMPF_ANIMATEDIFF_MODELS_DIR",
     str(COMFYUI_DIR / "custom_nodes" / "ComfyUI-AnimateDiff-Evolved" / "models"),
 ))
+# Z-Image-Turbo: інша архітектура (DiT + окремий текстовий енкодер), тому три
+# окремі файли замість одного checkpoint. Ті самі теки, що бачить ComfyUI
+# (models/diffusion_models, models/text_encoders, models/vae) — CHECKPOINTS_DIR
+# вже вказує на models/checkpoints, тож рахуємо решту відносно його батька.
+MODELS_ROOT_DIR = CHECKPOINTS_DIR.parent
+DIFFUSION_MODELS_DIR = Path(os.environ.get("COMPF_DIFFUSION_MODELS_DIR", str(MODELS_ROOT_DIR / "diffusion_models")))
+TEXT_ENCODERS_DIR = Path(os.environ.get("COMPF_TEXT_ENCODERS_DIR", str(MODELS_ROOT_DIR / "text_encoders")))
+VAE_MODELS_DIR = Path(os.environ.get("COMPF_VAE_MODELS_DIR", str(MODELS_ROOT_DIR / "vae")))
+
+ZIMAGE_UNET = "z_image_turbo_int8_convrot.safetensors"
+ZIMAGE_CLIP = "qwen_3_4b_fp8_mixed.safetensors"
+ZIMAGE_VAE = "ae.safetensors"
+# (назва, тека, очікуваний розмір у байтах — для бару прогресу завантаження,
+# точні розміри з сторінок файлів на huggingface.co/Comfy-Org/z_image_turbo)
+ZIMAGE_EXPECTED_FILES = [
+    ("diffusion model (int8)", DIFFUSION_MODELS_DIR / ZIMAGE_UNET, 6_200_000_000),
+    ("текстовий енкодер (fp8)", TEXT_ENCODERS_DIR / ZIMAGE_CLIP, 5_630_000_000),
+    ("VAE", VAE_MODELS_DIR / ZIMAGE_VAE, 335_000_000),
+]
 
 # --- Генерація фото: максимум якості в межах SD1.5 ---
 # Апскейл після генерації (справжня ESRGAN-модель, а не просто resize) —

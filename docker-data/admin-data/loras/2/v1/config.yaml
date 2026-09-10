@@ -1,0 +1,54 @@
+job: extension
+config:
+  name: char_2_v1
+  process:
+  - type: sd_trainer
+    training_folder: /data/loras/2/v1
+    device: cuda:0
+    network:
+      type: lora
+      linear: 16
+      linear_alpha: 16
+    save:
+      dtype: float16
+      save_every: 1500
+      max_step_saves_to_keep: 1
+    datasets:
+    - folder_path: /data/characters/2/v1
+      caption_ext: txt
+      caption_dropout_rate: 0.0
+      shuffle_tokens: false
+      cache_latents_to_disk: true
+      resolution:
+      - 512
+    train:
+      batch_size: 1
+      cache_text_embeddings: true
+      steps: 1500
+      gradient_accumulation: 1
+      train_unet: true
+      train_text_encoder: false
+      gradient_checkpointing: true
+      noise_scheduler: flowmatch
+      optimizer: adamw8bit
+      lr: 0.0001
+      dtype: bf16
+    model:
+      name_or_path: Tongyi-MAI/Z-Image-Turbo
+      arch: zimage
+      low_vram: true
+    sample:
+      sampler: flowmatch
+      sample_every: 1501
+      width: 512
+      height: 512
+      prompts:
+      - sks_testzdog, a golden retriever dog
+      neg: ''
+      seed: 42
+      walk_seed: false
+      guidance_scale: 1
+      sample_steps: 8
+meta:
+  name: char_2_v1
+  version: '1.0'

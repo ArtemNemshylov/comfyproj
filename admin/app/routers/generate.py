@@ -17,7 +17,7 @@ from .. import config
 from ..comfy_client import ComfyUIClient, ComfyUIError
 from ..db import get_session
 from ..models import Asset, AssetType, Character, CharacterVersion
-from ..workflows import build_photo_workflow, default_positive_prompt
+from ..workflows import build_zimage_workflow, default_positive_prompt
 
 router = APIRouter(prefix="/api/characters", tags=["generate"])
 
@@ -92,24 +92,18 @@ def generate_photo_asset(
         )
 
     positive = default_positive_prompt(version.prompt_prefix, character.trigger_token, pose_prompt)
-    negative = negative_prompt or config.DEFAULT_NEGATIVE_PROMPT
 
-    workflow = build_photo_workflow(
-        checkpoint=character.base_checkpoint,
-        lora_path=_lora_name_for_comfyui(version.lora_path),
-        lora_strength=config.DEFAULT_LORA_STRENGTH,
+    workflow = build_zimage_workflow(
+        unet_name=config.ZIMAGE_UNET,
+        clip_name=config.ZIMAGE_CLIP,
+        vae_name=config.ZIMAGE_VAE,
         positive_prompt=positive,
-        negative_prompt=negative,
-        width=width or config.GEN_WIDTH,
-        height=height or config.GEN_HEIGHT,
-        steps=steps or config.GEN_STEPS,
-        cfg=cfg or config.GEN_CFG,
-        sampler=config.GEN_SAMPLER,
-        scheduler=config.GEN_SCHEDULER,
+        width=width or 1024,
+        height=height or 1024,
         seed=seed,
         filename_prefix=f"char{character.id}_v{version.version_number}",
-        upscale_model=config.UPSCALE_MODEL if config.GEN_UPSCALE_ENABLED else None,
-        final_scale=config.GEN_FINAL_SCALE,
+        lora_path=_lora_name_for_comfyui(version.lora_path),
+        lora_strength=config.DEFAULT_LORA_STRENGTH,
     )
 
     try:
@@ -138,7 +132,7 @@ def generate_photo_asset(
         type=AssetType.photo,
         file_path=str(out_path),
         prompt=positive,
-        negative_prompt=negative,
+        negative_prompt="",  # Z-Image Turbo (cfg=1) не використовує негативний промпт
         seed=seed,
         meta={"pose_prompt": pose_prompt},
     )

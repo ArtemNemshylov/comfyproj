@@ -9,6 +9,8 @@ const state = {
   videoAssets: [],
   activeTab: "overview",
   trainPollTimer: null,
+  freeformMode: false,
+  freeformHistory: [],
 };
 
 const POSE_PRESETS = [
@@ -85,9 +87,22 @@ function renderSidebar() {
 
 async function selectCharacter(id) {
   state.selectedId = id;
+  state.freeformMode = false;
   state.activeTab = "overview";
   renderSidebar();
   await loadDetail();
+}
+
+async function selectFreeform() {
+  state.selectedId = null;
+  state.freeformMode = true;
+  renderSidebar();
+  try {
+    state.freeformHistory = await api("/api/generate/freeform/history");
+  } catch (e) {
+    state.freeformHistory = [];
+  }
+  renderMain();
 }
 
 async function loadDetail() {
@@ -106,6 +121,10 @@ async function loadDetail() {
 function renderMain() {
   const main = document.getElementById("main");
   main.innerHTML = "";
+  if (state.freeformMode) {
+    renderFreeformPanel(main);
+    return;
+  }
   if (!state.detail) {
     main.appendChild(el("div", { class: "empty-state" }, el("p", {}, "Оберіть персонажа зліва або створіть нового.")));
     return;
@@ -416,6 +435,153 @@ function renderNewTrait(body, character, versions) {
   body.appendChild(card);
 }
 
+// ---------- freeform (без персонажа/LoRA) ----------
+
+// Бар прогресу завантаження файлів моделі (Z-Image Turbo тощо) — окремий
+// таймер, показуємо тільки поки хоч один трекований файл ще не done.
+function startModelDownloadPolling(container) {
+  let timer = null;
+  const tick = async () => {
+    let files;
+    try { files = await api("/api/models/download-status"); } catch (e) { return; }
+    const allDone = files.every(f => f.done);
+    if (allDone) {
+      container.style.display = "none";
+      container.innerHTML = "";
+      if (timer) clearInterval(timer);
+      return;
+    }
+    container.style.display = "block";
+    container.innerHTML = "";
+    container.appendChild(el("div", { class: "muted" }, "Довантаження моделі Z-Image Turbo (тримається сама, можна користуватись Realistic Vision тим часом):"));
+    for (const f of files) {
+      const mb = (n) => (n / 1e6).toFixed(0) + "МБ";
+      container.appendChild(el("div", { class: "muted", style: "margin-top:6px" }, `${f.label}: ${mb(f.bytes)} / ${mb(f.expected_bytes)} (${f.pct}%)`));
+      container.appendChild(el("div", { class: "progress-bar" }, el("div", { style: `width:${f.pct}%` })));
+    }
+  };
+  tick();
+  timer = setInterval(tick, 3000);
+  return () => { if (timer) clearInterval(timer); };
+}
+
+// Бар прогресу самої генерації (крок семплера) — читає /api/generate/progress,
+// який фонів слухач у бекенді наповнює з websocket ComfyUI.
+function startGenerationProgressPolling(barEl, labelEl) {
+  const timer = setInterval(async () => {
+    let p;
+    try { p = await api("/api/generate/progress"); } catch (e) { return; }
+    if (p.max) {
+      const pct = Math.round(100 * p.value / p.max);
+      barEl.style.width = pct + "%";
+      labelEl.textContent = `Крок ${p.value}/${p.max}`;
+    } else {
+      labelEl.textContent = "Підготовка (завантаження моделі в VRAM)...";
+    }
+  }, 400);
+  return () => clearInterval(timer);
+}
+
+function renderFreeformPanel(main) {
+  const header = el("div", { class: "card" }, [
+    el("h2", { style: "margin:0" }, "Довільне фото за промптом"),
+    el("div", { class: "muted" }, "Без LoRA й без прив'язки до персонажа — будь-який текстовий опис."),
+  ]);
+  main.appendChild(header);
+
+  if (state.stopDlPolling) state.stopDlPolling();
+  const dlStatus = el("div", { class: "card", style: "display:none" });
+  main.appendChild(dlStatus);
+  state.stopDlPolling = startModelDownloadPolling(dlStatus);
+
+  const card = el("div", { class: "card" });
+
+  const engineSelect = el("select", {}, [
+    el("option", { value: "sd15" }, "Realistic Vision (SD1.5) — швидко, 512px"),
+    el("option", { value: "zimage" }, "Z-Image Turbo — повільніше якщо ще вантажиться модель, 1024px"),
+  ]);
+  card.appendChild(el("div", { class: "form-row" }, [el("label", {}, "Рушій"), engineSelect]));
+
+  const promptInput = el("textarea", { placeholder: "Опишіть, що згенерувати..." });
+  card.appendChild(el("div", { class: "form-row" }, [el("label", {}, "Промпт"), promptInput]));
+
+  const negRow = el("div", { class: "form-row" }, [el("label", {}, "Негативний промпт"), el("textarea", { placeholder: "(необов'язково) — за замовчуванням стандартний. Не використовується для Z-Image Turbo." })]);
+  card.appendChild(negRow);
+  const negInput = negRow.querySelector("textarea");
+  engineSelect.addEventListener("change", () => {
+    negRow.style.display = engineSelect.value === "zimage" ? "none" : "flex";
+  });
+
+  const seedInput = el("input", { type: "number", placeholder: "порожньо = випадковий" });
+  card.appendChild(el("div", { class: "form-row" }, [
+    el("label", {}, "Seed (встав той самий + той самий детальний опис зовнішності, щоб отримати схожого персонажа в іншій позі/сцені)"),
+    seedInput,
+  ]));
+
+  const genBtn = el("button", { class: "btn btn-primary" }, "Згенерувати фото");
+  const statusEl = el("span", { class: "muted", style: "margin-left:10px" });
+  const progressBarWrap = el("div", { class: "progress-bar", style: "display:none" }, el("div", { style: "width:0%" }));
+  const progressLabel = el("div", { class: "muted", style: "display:none" });
+  const progressBar = progressBarWrap.querySelector("div");
+
+  genBtn.addEventListener("click", async () => {
+    if (!promptInput.value.trim()) { alert("Введіть промпт"); return; }
+    genBtn.disabled = true;
+    statusEl.textContent = "Генерація...";
+    progressBarWrap.style.display = "block";
+    progressLabel.style.display = "block";
+    progressBar.style.width = "0%";
+    const stopPolling = startGenerationProgressPolling(progressBar, progressLabel);
+    try {
+      const result = await api("/api/generate/freeform", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt: promptInput.value.trim(),
+          engine: engineSelect.value,
+          negative_prompt: negInput.value.trim() || null,
+          seed: seedInput.value.trim() ? parseInt(seedInput.value.trim(), 10) : null,
+        }),
+      });
+      statusEl.textContent = `Готово (seed: ${result.seed})`;
+      seedInput.value = result.seed;
+      state.freeformHistory = await api("/api/generate/freeform/history");
+      renderFreeformGrid(document.getElementById("freeformGrid"));
+    } catch (e) {
+      statusEl.textContent = "";
+      alert("Помилка генерації: " + e.message);
+    } finally {
+      stopPolling();
+      genBtn.disabled = false;
+      progressBarWrap.style.display = "none";
+      progressLabel.style.display = "none";
+    }
+  });
+  card.appendChild(genBtn);
+  card.appendChild(statusEl);
+  card.appendChild(progressBarWrap);
+  card.appendChild(progressLabel);
+  main.appendChild(card);
+
+  const galCard = el("div", { class: "card" });
+  galCard.appendChild(el("h3", { style: "margin-top:0" }, "Останні згенеровані фото"));
+  const grid = el("div", { class: "grid", id: "freeformGrid" });
+  renderFreeformGrid(grid);
+  galCard.appendChild(grid);
+  main.appendChild(galCard);
+}
+
+function renderFreeformGrid(grid) {
+  grid.innerHTML = "";
+  if (!state.freeformHistory.length) {
+    grid.appendChild(el("div", { class: "muted" }, "Поки що нічого не згенеровано."));
+  } else {
+    for (const a of state.freeformHistory) {
+      grid.appendChild(el("div", { class: "asset-card" }, el("img", { src: a.url })));
+    }
+  }
+}
+
 // ---------- create character modal ----------
 function openNewCharacterModal() {
   const root = document.getElementById("modalRoot");
@@ -460,6 +626,7 @@ function openNewCharacterModal() {
 
 // ---------- init ----------
 document.getElementById("newCharBtn").addEventListener("click", openNewCharacterModal);
+document.getElementById("freeformBtn").addEventListener("click", selectFreeform);
 refreshHealth();
 setInterval(refreshHealth, 10000);
 loadCharacters();

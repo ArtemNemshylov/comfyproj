@@ -10,13 +10,15 @@ ADMIN_DATA_MOUNT="${COMPF_ADMIN_DATA_MOUNT:-/admin-data}"
 
 mkdir -p "$MODELS_DIR/checkpoints" "$MODELS_DIR/upscale_models" "$MOTION_DIR"
 
-CKPT="$MODELS_DIR/checkpoints/v1-5-pruned-emaonly.safetensors"
-if [ ! -f "$CKPT" ]; then
-    echo "[entrypoint] Завантаження SD1.5 checkpoint (~4 ГБ)..."
-    curl -L --fail -C - -o "$CKPT" \
-        "https://huggingface.co/Comfy-Org/stable-diffusion-v1-5-archive/resolve/main/v1-5-pruned-emaonly.safetensors"
-else
-    echo "[entrypoint] Checkpoint вже є, пропускаємо"
+# NOTE 2026-09-01: базовий vanilla SD1.5 checkpoint (v1-5-pruned-emaonly)
+# свідомо прибраний — замінений на Realistic_Vision_V5.1_fp16-no-ema.safetensors
+# (значно кращий фотореалізм, особливо для людей), який кладеться в цю ж
+# теку вручну (див. COMPF_BASE_CHECKPOINT у docker-compose.yml). Якщо
+# COMPF_CHECKPOINTS_DIR порожній — покладіть туди потрібний .safetensors
+# самостійно, автозавантаження тут більше немає.
+CKPT="$MODELS_DIR/checkpoints/${COMPF_BASE_CHECKPOINT:-}"
+if [ -n "${COMPF_BASE_CHECKPOINT:-}" ] && [ ! -f "$CKPT" ]; then
+    echo "[entrypoint] УВАГА: чекпоінт $COMPF_BASE_CHECKPOINT не знайдено в $MODELS_DIR/checkpoints/ — покладіть його туди вручну."
 fi
 
 MM_FILE="$MOTION_DIR/mm_sd_v15_v2.ckpt"
@@ -46,4 +48,9 @@ YAML
 
 echo "[entrypoint] Старт ComfyUI на 0.0.0.0:8188"
 cd /app/comfyui
-exec python main.py --listen 0.0.0.0 --port 8188
+# --disable-dynamic-vram: "Dynamic VRAM"-стрімінг ваг напряму з файлу на
+# диск падає з "HostBuffer.read_file_slice failed" / "pread failed errno=12"
+# на bind-монтованому томі під Docker Desktop + WSL2 (файлова система там
+# віртуалізована, не пряме читання диска) — вимикаємо, моделі й так влазять
+# у 12ГБ VRAM без цього трюка.
+exec python main.py --listen 0.0.0.0 --port 8188 --disable-dynamic-vram

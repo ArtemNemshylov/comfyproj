@@ -23,6 +23,13 @@ RUN mkdir -p custom_nodes \
     && (pip install --no-cache-dir -r custom_nodes/ComfyUI-AnimateDiff-Evolved/requirements.txt || true) \
     && (pip install --no-cache-dir -r custom_nodes/ComfyUI-VideoHelperSuite/requirements.txt || true)
 
+# Z-Image-Turbo (S3-DiT) використовує Triton для JIT-компіляції одного зі
+# своїх ядер під час генерації — Triton шукає C-компілятор у PATH і падає
+# з "Failed to find C compiler" без нього. Додано окремим кроком в кінці,
+# щоб не інвалідувати кеш попередніх (важких, довгих) pip install-шарів.
+RUN apt-get update && apt-get install -y --no-install-recommends build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY docker/entrypoint-comfyui.sh /app/entrypoint-comfyui.sh
 RUN chmod +x /app/entrypoint-comfyui.sh
 

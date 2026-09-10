@@ -19,7 +19,7 @@ from .models import (
     Character, CharacterVersion, Job, JobType, JobStatus, VersionStatus, CharacterStatus,
 )
 
-TRAIN_SCRIPT = config.BASE_DIR / "training" / "train_lora.py"
+TRAIN_SCRIPT = config.BASE_DIR / "training" / "train_lora_zimage.py"
 
 
 def _progress_file(job_id: int) -> Path:
@@ -55,13 +55,10 @@ def start_training(session: Session, character: Character, version: CharacterVer
     progress_file = _progress_file(job.id)
     log_file = _log_file(job.id)
 
-    base_model_path = config.CHECKPOINTS_DIR / character.base_checkpoint
-
     cmd = [
         sys.executable, str(TRAIN_SCRIPT),
         "--images-dir", str(images_dir),
         "--output-dir", str(output_dir),
-        "--base-model", str(base_model_path),
         "--trigger-token", character.trigger_token,
         "--caption", build_caption(version, character.base_description),
         "--resolution", str(config.TRAIN_RESOLUTION),

@@ -16,6 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, B
 from sqlmodel import Session, select
 
 from .. import config, training
+from .. import progress as progress_module
 from ..db import get_session
 from ..models import (
     Character, CharacterVersion, Job,
@@ -161,15 +162,12 @@ def train_version(character_id: int, version_id: int, session: Session = Depends
     if not version.reference_images:
         raise HTTPException(400, "У версії немає референсних фото для тренування")
 
-    checkpoint_path = config.CHECKPOINTS_DIR / character.base_checkpoint
-    if not checkpoint_path.exists():
+    missing = [f["label"] for f in progress_module.model_download_status() if not f["done"]]
+    if missing:
         raise HTTPException(
             409,
-            f"Базовий чекпоінт {character.base_checkpoint} не знайдено у "
-            f"{config.CHECKPOINTS_DIR}. Нативний запуск: спершу виконайте "
-            f"scripts/setup_comfyui.sh у звичайному терміналі macOS. "
-            f"Docker-запуск: дочекайтесь, поки comfyui-контейнер довантажить "
-            f"моделі (docker/entrypoint-comfyui.sh) — дивіться docker compose logs comfyui.",
+            f"Ще довантажуються файли Z-Image Turbo: {', '.join(missing)}. "
+            f"Перевірте /api/models/download-status.",
         )
 
     job = training.start_training(session, character, version)
